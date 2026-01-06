@@ -3,6 +3,7 @@ if (!defined('ABSPATH')) exit;
 
 require_once DIMENU_HOURS_PLUGIN_DIR . 'includes/class-settings.php';
 require_once DIMENU_HOURS_PLUGIN_DIR . 'includes/helpers.php';
+require_once DIMENU_HOURS_PLUGIN_DIR . 'includes/class-exceptions.php';
 
 class Dimenu_Hours_Status {
 
@@ -42,15 +43,21 @@ class Dimenu_Hours_Status {
     }
 
     $weekly = $settings['weekly'] ?? array();
-    $result = self::status_from_weekly($weekly, $now, $tz, $settings['messages'] ?? array());
+    $exceptions = Dimenu_Hours_Exceptions::normalize($settings['exceptions'] ?? array());
+    $messages = $settings['messages'] ?? array();
+
+    $result = self::status_from_schedule($weekly, $exceptions, $now, $tz, $messages);
 
     return $result;
   }
 
-  private static function status_from_weekly(array $weekly, DateTime $now, string $tz, array $messages): array {
+  private static function status_from_schedule(array $weekly, array $exceptions, DateTime $now, string $tz, array $messages): array {
     $w = Dimenu_Hours_Helpers::wp_weekday_index($now);
-    $today = self::find_day($weekly, $w);
-    $yesterday = self::find_day($weekly, ($w + 6) % 7);
+    $today = self::build_day($weekly, $exceptions, $now, $w);
+
+    $yesterdayDt = clone $now;
+    $yesterdayDt->modify('-1 day');
+    $yesterday = self::build_day($weekly, $exceptions, $yesterdayDt, ($w + 6) % 7);
 
     $nowMin = (int)$now->format('H') * 60 + (int)$now->format('i');
 
@@ -59,7 +66,6 @@ class Dimenu_Hours_Status {
     foreach ($yIntervals as $it) {
       if ($it['end_min'] < $it['start_min']) {
         // overnight: yesterday start -> today end
-        // open today if nowMin < end
         if ($nowMin < $it['end_min']) {
           $openStart = clone $now;
           $openStart->modify('-1 day');
@@ -68,14 +74,14 @@ class Dimenu_Hours_Status {
           $closeEnd = clone $now;
           $closeEnd->setTime((int)floor($it['end_min']/60), $it['end_min']%60, 0);
 
-          return self::open_payload($now, $tz, $openStart, $closeEnd, $messages);
+          return self::open_payload($now, $tz, $openStart, $closeEnd, $messages, $yesterday['source']);
         }
       }
     }
 
-    // If today is marked closed => still might have intervals (but we treat as closed)
+    // If today is marked closed
     if (!empty($today['is_closed'])) {
-      return self::closed_payload($now, $tz, self::find_next_open($weekly, $now), $messages);
+      return self::closed_payload($now, $tz, self::find_next_open($weekly, $exceptions, $now), $messages, $today['source'], $today['human_override'] ?? '');
     }
 
     // Check today's intervals (including overnight that end tomorrow)
@@ -90,7 +96,7 @@ class Dimenu_Hours_Status {
           $closeEnd = clone $now;
           $closeEnd->setTime((int)floor($it['end_min']/60), $it['end_min']%60, 0);
 
-          return self::open_payload($now, $tz, $openStart, $closeEnd, $messages);
+          return self::open_payload($now, $tz, $openStart, $closeEnd, $messages, $today['source']);
         }
       } else {
         // overnight interval: today start -> tomorrow end
@@ -102,15 +108,43 @@ class Dimenu_Hours_Status {
           $closeEnd->modify('+1 day');
           $closeEnd->setTime((int)floor($it['end_min']/60), $it['end_min']%60, 0);
 
-          return self::open_payload($now, $tz, $openStart, $closeEnd, $messages);
+          return self::open_payload($now, $tz, $openStart, $closeEnd, $messages, $today['source']);
         }
         // If now is after midnight part, handled by yesterday block above
       }
     }
 
     // Not open now => find next open
-    $next = self::find_next_open($weekly, $now);
-    return self::closed_payload($now, $tz, $next, $messages);
+    $next = self::find_next_open($weekly, $exceptions, $now);
+    return self::closed_payload($now, $tz, $next, $messages, $today['source'], $today['human_override'] ?? '');
+  }
+
+  private static function build_day(array $weekly, array $exceptions, DateTime $dt, int $dayIndex): array {
+    $ex = Dimenu_Hours_Exceptions::get_for_date($exceptions, $dt);
+    if ($ex !== null) {
+      if ($ex['type'] === 'closed') {
+        return array(
+          'day' => $dayIndex,
+          'is_closed' => true,
+          'intervals' => array(),
+          'source' => 'exception',
+          'human_override' => 'Closed due to exception.',
+        );
+      }
+
+      if ($ex['type'] === 'special_hours') {
+        return array(
+          'day' => $dayIndex,
+          'is_closed' => false,
+          'intervals' => $ex['intervals'] ?? array(),
+          'source' => 'exception',
+        );
+      }
+    }
+
+    $day = self::find_day($weekly, $dayIndex);
+    $day['source'] = 'schedule';
+    return $day;
   }
 
   private static function find_day(array $weekly, int $dayIndex): array {
@@ -118,28 +152,27 @@ class Dimenu_Hours_Status {
       if (is_array($d) && isset($d['day']) && (int)$d['day'] === $dayIndex) return $d;
     }
     // fallback
-    return array('day' => $dayIndex, 'is_closed' => false, 'intervals' => array());
+    return array('day' => $dayIndex, 'is_closed' => false, 'intervals' => array(), 'source' => 'schedule');
   }
 
-  private static function find_next_open(array $weekly, DateTime $now): string {
-    // Search from "now" up to 7 days ahead
+  private static function find_next_open(array $weekly, array $exceptions, DateTime $now): string {
+    // Search from "now" up to 14 days ahead
     $base = clone $now;
     $baseMin = (int)$base->format('H') * 60 + (int)$base->format('i');
 
-    for ($i = 0; $i < 8; $i++) {
+    for ($i = 0; $i < 14; $i++) {
       $dt = clone $base;
       if ($i > 0) $dt->modify("+$i day");
       $w = (int)$dt->format('w');
-      $day = self::find_day($weekly, $w);
+
+      $day = self::build_day($weekly, $exceptions, $dt, $w);
 
       if (!empty($day['is_closed'])) continue;
 
       $intervals = Dimenu_Hours_Helpers::normalize_intervals($day['intervals'] ?? array());
       if (empty($intervals)) continue;
 
-      // For today, find first interval start after nowMin (or if overnight and we're before end? already handled)
       if ($i === 0) {
-        // choose the earliest start >= now
         $starts = array();
         foreach ($intervals as $it) {
           $starts[] = $it['start_min'];
@@ -152,7 +185,6 @@ class Dimenu_Hours_Status {
           }
         }
       } else {
-        // next days => first start
         $sm = null;
         foreach ($intervals as $it) {
           if ($sm === null || $it['start_min'] < $sm) $sm = $it['start_min'];
@@ -167,7 +199,7 @@ class Dimenu_Hours_Status {
     return '';
   }
 
-  private static function open_payload(DateTime $now, string $tz, DateTime $opensAt, DateTime $closesAt, array $messages): array {
+  private static function open_payload(DateTime $now, string $tz, DateTime $opensAt, DateTime $closesAt, array $messages, string $reason = 'schedule'): array {
     $openMsg = $messages['open_now'] ?? 'Open now.';
     $until = $messages['until_prefix'] ?? 'until';
 
@@ -175,7 +207,7 @@ class Dimenu_Hours_Status {
 
     return array(
       'is_open' => true,
-      'reason' => 'schedule',
+      'reason' => $reason,
       'opens_at' => $opensAt->format(DateTime::ATOM),
       'closes_at' => $closesAt->format(DateTime::ATOM),
       'next_open_at' => '',
@@ -185,8 +217,8 @@ class Dimenu_Hours_Status {
     );
   }
 
-  private static function closed_payload(DateTime $now, string $tz, string $nextOpenIso, array $messages): array {
-    $closedMsg = $messages['closed_now'] ?? 'Closed now.';
+  private static function closed_payload(DateTime $now, string $tz, string $nextOpenIso, array $messages, string $reason = 'schedule', string $humanOverride = ''): array {
+    $closedMsg = $humanOverride !== '' ? $humanOverride : ($messages['closed_now'] ?? 'Closed now.');
     $prefix = $messages['next_open_prefix'] ?? 'Next open:';
 
     $human = $closedMsg;
@@ -201,7 +233,7 @@ class Dimenu_Hours_Status {
 
     return array(
       'is_open' => false,
-      'reason' => 'schedule',
+      'reason' => $reason,
       'opens_at' => '',
       'closes_at' => '',
       'next_open_at' => $nextOpenIso,

@@ -6,7 +6,6 @@ if (!defined('ABSPATH')) {
 class Dimenu_Hours_Activator {
 
   public static function activate() {
-    // Create defaults if not present
     $option_key = 'dimenu_hours_settings';
     $existing = get_option($option_key, null);
 
@@ -16,7 +15,6 @@ class Dimenu_Hours_Activator {
       return;
     }
 
-    // If option exists but missing keys, patch minimal keys
     $patched = self::patch_settings($existing);
     update_option($option_key, $patched, false);
   }
@@ -29,18 +27,10 @@ class Dimenu_Hours_Activator {
 
     return array(
       'version' => defined('DIMENU_HOURS_VERSION') ? DIMENU_HOURS_VERSION : '0.1.0',
-
-      // Global toggle to enable/disable the whole feature.
       'enabled' => true,
-
-      // Manual override: if on => always closed (ordering disabled) regardless of schedule.
       'manual_closed' => false,
-      'manual_closed_until' => '', // ISO string optional (future use)
-
-      // Timezone used for calculations
+      'manual_closed_until' => '',
       'timezone' => $tz,
-
-      // Weekly schedule: 0=Sunday .. 6=Saturday (WP default)
       'weekly' => array(
         array('day' => 0, 'is_closed' => false, 'intervals' => array(array('start' => '09:00', 'end' => '21:00'))),
         array('day' => 1, 'is_closed' => false, 'intervals' => array(array('start' => '09:00', 'end' => '21:00'))),
@@ -50,24 +40,19 @@ class Dimenu_Hours_Activator {
         array('day' => 5, 'is_closed' => false, 'intervals' => array(array('start' => '09:00', 'end' => '21:00'))),
         array('day' => 6, 'is_closed' => false, 'intervals' => array(array('start' => '09:00', 'end' => '21:00'))),
       ),
-
-      // Exceptions: see later implementation
       'exceptions' => array(),
-
-      // User-editable messages
       'messages' => array(
         'closed_now' => 'الان بسته‌ایم.',
         'open_now' => 'الان باز هستیم.',
-        'next_open_prefix' => 'سفارش‌گیری از',
+        'next_open_prefix' => 'بازگشایی بعدی:',
         'until_prefix' => 'تا',
-        'manual_closed' => 'فعلاً پذیرش سفارش غیرفعال است.',
+        'manual_closed' => 'سفارش‌گیری موقتاً غیرفعال است.',
       ),
-
-      // UI behavior (MVP flags)
       'ui' => array(
         'gate_add_to_cart' => true,
         'gate_checkout' => true,
         'show_banner' => true,
+        'redirect_url' => '',
       ),
     );
   }

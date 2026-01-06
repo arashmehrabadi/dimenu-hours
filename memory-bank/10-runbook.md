@@ -14,46 +14,34 @@
   - enabled toggle
   - manual_closed
   - weekly schedule (multiple intervals + overnight)
-- Exceptions exist in schema but NOT applied yet
-- Admin UI only has basic toggles/messages, no weekly/exceptions editor
+  - exceptions (closed/special_hours) with priority over weekly + next_open_at
+- Admin UI in Persian with:
+  - weekly schedule table (add/remove intervals, closed toggle)
+  - exceptions table (closed/special_hours with intervals)
+  - editable messages
+  - redirect URL for cart/checkout when closed
+- WooCommerce gating:
+  - add-to-cart blocked when closed
+  - cart/checkout/order endpoints redirect to redirect_url (or home/?dimenu_closed=1)
+- Public JS:
+  - configurable banner container selector + gate selectors (via localized vars)
 
 ## Next milestone (Priority)
-### A) Implement Exceptions in Status Engine
-Files:
-- includes/class-status.php (update)
-- optionally: includes/class-exceptions.php (helper class)
+### A) Polish UI/UX
+- Add settings to choose bannerSelector/gateSelectors instead of code defaults.
+- Add helper text/validation errors for overlaps/empty intervals in weekly/exceptions forms.
+- Optional: add RTL tweaks to admin table widths.
 
-Plan:
-1) Parse exceptions from settings
-2) Determine if "today" matches:
-   - date == today OR start_date<=today<=end_date
-3) Apply exception priority:
-   - closed => CLOSED (reason: exception)
-   - special_hours => evaluate intervals for today (support overnight)
-4) Set next_open_at based on exception intervals or fall back to weekly
+### B) Frontend integration
+- Inject banner into real dimenu container once selector provided.
+- Tune gate selectors to real dimenu add-to-cart/checkout buttons.
 
-### B) Admin UI for Weekly Schedule
-Files:
-- includes/class-settings.php (render form sections + handle POST)
-- assets/admin/admin.js (dynamic add/remove intervals)
-- assets/admin/admin.css
+### C) WooCommerce redirect UX
+- Show a friendly landing page/message at redirect_url (currently just param on home).
 
-Plan:
-- Render 7-day table
-- For each day: checkbox closed, list intervals
-- Add "Add interval" button
-- Validate overlaps server-side in sanitize_post
-
-### C) Admin UI for Exceptions
-Files:
-- includes/class-settings.php + admin.js
-- store as exceptions[] in option
-- allow delete/edit rows
-
-### D) Improve public selectors + banner placement
-- inspect dimenu HTML, set precise selectors
-- inject banner into dimenu container instead of document.body
-- add setting: redirect_url for cart/checkout redirect target
+### D) Testing
+- Manual: REST `/wp-json/dimenu/v1/status` with weekly + exceptions (closed and special_hours).
+- Woo: add-to-cart blocked + cart/checkout redirect when closed; normal flow when open.
 
 ## Command checklist for debugging
 - Check PHP errors: wp-content/debug.log (if enabled)

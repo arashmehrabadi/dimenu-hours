@@ -67,6 +67,8 @@ class Dimenu_Hours_Plugin {
   wp_localize_script('dimenu-hours-public', 'DIMENU_HOURS', array(
     'restUrl' => esc_url_raw(rest_url('dimenu/v1/status')),
     'showBanner' => true,
+    'bannerSelector' => '',
+    'gateSelectors' => array(),
   ));
 }
 

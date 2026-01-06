@@ -14,6 +14,9 @@
   function ensureBanner(text) {
     if (!window.DIMENU_HOURS?.showBanner) return;
 
+    const targetSelector = window.DIMENU_HOURS?.bannerSelector || null;
+    const container = targetSelector ? document.querySelector(targetSelector) : null;
+
     const id = 'dimenu-hours-banner';
     let el = document.getElementById(id);
     if (!el) {
@@ -28,15 +31,18 @@
       el.style.background = 'rgba(255, 193, 7, .15)';
       el.style.position = 'relative';
       el.style.zIndex = '5';
-      // insert at top of body (later we can target dimenu container)
-      document.body.prepend(el);
+      if (container) {
+        container.prepend(el);
+      } else {
+        document.body.prepend(el);
+      }
     }
     el.textContent = text || '';
   }
 
   function gateButtons() {
-    // Generic selectors; we’ll refine for dimenu UI once you show me one sample HTML
-    const selectors = [
+    const customSelectors = window.DIMENU_HOURS?.gateSelectors;
+    const selectors = Array.isArray(customSelectors) && customSelectors.length > 0 ? customSelectors : [
       'button[name="add-to-cart"]',
       'button.single_add_to_cart_button',
       '.add_to_cart_button',
@@ -49,7 +55,6 @@
 
     const nodes = document.querySelectorAll(selectors.join(','));
     nodes.forEach((btn) => {
-      // For links, convert to disabled-like behavior
       if (btn.tagName === 'A') {
         btn.setAttribute('aria-disabled', 'true');
         btn.addEventListener('click', (e) => {
@@ -73,9 +78,8 @@
     if (!status) return;
 
     if (status.is_open === false) {
-      ensureBanner(status.human || 'الان بسته‌ایم.');
+      ensureBanner(status.human || 'Closed now.');
       gateButtons();
-      // repeat after dynamic changes
       setTimeout(gateButtons, 800);
       setTimeout(gateButtons, 2000);
     }

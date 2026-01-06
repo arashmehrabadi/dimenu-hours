@@ -1,0 +1,62 @@
+#dimenu-hours-banner {
+  direction: rtl;
+}
+
+.dimenu-hours-weekly .interval-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+
+.dimenu-hours-weekly .interval-row input[type="time"] {
+  width: 110px;
+}
+
+.dimenu-hours-weekly .interval-row .sep {
+  display: inline-block;
+  width: 10px;
+  text-align: center;
+}
+
+.dimenu-hours-weekly .add-interval {
+  margin-top: 4px;
+}
+
+.dimenu-hours-weekly tr.is-closed {
+  opacity: 0.6;
+}
+
+.dimenu-hours-exceptions .interval-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+
+.dimenu-hours-exceptions .interval-row input[type="time"] {
+  width: 110px;
+}
+
+.dimenu-hours-exceptions .add-ex-interval {
+  margin-top: 4px;
+}
+
+.dimenu-hours-exceptions .is-special .ex-intervals {
+  opacity: 1;
+}
+
+.dimenu-hours-exceptions .exception-row:not(.is-special) .ex-intervals,
+.dimenu-hours-exceptions .exception-row:not(.is-special) .add-ex-interval,
+.dimenu-hours-exceptions .exception-row:not(.is-special) .remove-ex-interval {
+  opacity: 0.5;
+}
+
+.dimenu-hours-admin {
+  direction: rtl;
+  text-align: right;
+}
+
+.dimenu-hours-admin table th {
+  text-align: right;
+}
